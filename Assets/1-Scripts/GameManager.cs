@@ -18,6 +18,10 @@ public class GameManager : MonoBehaviour
     public float combo30Multiplier = 3f;
     public string comboTextPrefix = "COMBO: ";
 
+    [Header("Miss Penalty Settings")]
+    public bool enableMissPenalty = true;
+    public float missPenaltyAmount = 5f;
+
     [Header("UI")]
     public TextMeshProUGUI playerScoreText;
     public TextMeshProUGUI aiScoreText;
@@ -124,7 +128,7 @@ public class GameManager : MonoBehaviour
         string winner = "Tie";
         if (playerScore > aiScore) winner = "Player Wins!";
         else if (aiScore > playerScore) winner = "AI Wins!";
-        Debug.Log("Race Finished → " + winner);
+
     }
 
     void HandleAIDelay()
@@ -158,11 +162,8 @@ public class GameManager : MonoBehaviour
     void UpdateCarPositions()
     {
         float diff = playerScore - aiScore;
-
-        // Normalize the difference to a 0-1 range, then map to minZOffset-maxZOffset
         float normalizedDiff = Mathf.Clamp(diff / maxScoreDiff, -1f, 1f);
 
-        // Map from [-1, 1] to [minZOffset, maxZOffset]
         float playerTargetZ = Mathf.Lerp(0f, maxZOffset, Mathf.Max(0f, normalizedDiff));
         playerTargetZ += Mathf.Lerp(0f, minZOffset, Mathf.Max(0f, -normalizedDiff));
 
@@ -195,7 +196,7 @@ public class GameManager : MonoBehaviour
             if (playerCombo >= comboStartThreshold)
             {
                 float multiplier = GetComboMultiplier();
-                comboText.text = string.Format("{0}{1} (x{2})", comboTextPrefix, playerCombo, multiplier);
+                comboText.text = $"{comboTextPrefix}{playerCombo} (x{multiplier})";
             }
             else
             {
@@ -210,7 +211,7 @@ public class GameManager : MonoBehaviour
         {
             int minutes = Mathf.FloorToInt(timer / 60);
             int seconds = Mathf.FloorToInt(timer % 60);
-            timerText.text = string.Format("{0:00}:{1:00}", minutes, seconds);
+            timerText.text = $"{minutes:00}:{seconds:00}";
         }
     }
 
@@ -230,12 +231,10 @@ public class GameManager : MonoBehaviour
 
     public void ShowHitFeedback(string feedback)
     {
-        // Deactivate all first
         if (perfectUI != null) perfectUI.SetActive(false);
         if (goodUI != null) goodUI.SetActive(false);
         if (missUI != null) missUI.SetActive(false);
 
-        // Activate the correct one
         if (feedback == "Perfect" && perfectUI != null)
         {
             perfectUI.SetActive(true);
@@ -253,41 +252,47 @@ public class GameManager : MonoBehaviour
         }
     }
 
+    // ✅ UPDATED METHOD
     public void AddPlayerScore(int amount, string hitQuality)
     {
-        // Only Perfect hits increase combo
         if (hitQuality == "Perfect")
         {
             playerCombo++;
 
-            // Apply multiplier if combo threshold reached
             if (playerCombo >= comboStartThreshold)
             {
                 float multiplier = GetComboMultiplier();
                 amount = Mathf.RoundToInt(amount * multiplier);
             }
+
+            playerScore += amount;
         }
-        else
+        else if (hitQuality == "Good")
         {
-            // Good or Miss breaks combo
             ResetCombo();
+            playerScore += amount;
+        }
+        else if (hitQuality == "Miss")
+        {
+            ResetCombo();
+
+            if (enableMissPenalty)
+            {
+                playerScore -= Mathf.RoundToInt(missPenaltyAmount);
+                playerScore = Mathf.Max(0, playerScore); // clamp
+            }
         }
 
-        playerScore += amount;
         UpdateScoreUI();
         UpdateComboUI();
     }
 
     float GetComboMultiplier()
     {
-        if (playerCombo >= 30)
-            return combo30Multiplier;
-        else if (playerCombo >= 20)
-            return combo20Multiplier;
-        else if (playerCombo >= 10)
-            return combo10Multiplier;
-        else
-            return 1f;
+        if (playerCombo >= 30) return combo30Multiplier;
+        if (playerCombo >= 20) return combo20Multiplier;
+        if (playerCombo >= 10) return combo10Multiplier;
+        return 1f;
     }
 
     public void ResetCombo()
